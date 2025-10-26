@@ -1,4 +1,4 @@
-import { WhopAPI } from '@whop/sdk';
+import { Whop } from '@whop/sdk';
 
 export function getWhopOAuthUrl(): string {
   const clientId = process.env.NEXT_PUBLIC_WHOP_CLIENT_ID!;
@@ -16,7 +16,7 @@ export function getWhopOAuthUrl(): string {
 }
 
 export function createWhopClient(accessToken?: string) {
-  return new WhopAPI({
+  return new Whop({
     clientId: process.env.NEXT_PUBLIC_WHOP_CLIENT_ID!,
     clientSecret: process.env.WHOP_CLIENT_SECRET!,
     accessToken,
