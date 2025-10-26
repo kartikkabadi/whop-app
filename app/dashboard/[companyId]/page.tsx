@@ -21,14 +21,11 @@ export default async function DashboardPage({
 		redirect(`/api/auth/login?redirect=/dashboard/${companyId}`);
 	}
 
-	// Step 2: Validate the authenticated user has access to the target company
-	const hasAccess = await whopsdk.users.checkIfUserHasAccessToCompany({
-		userId,
-		companyId,
-	});
-
+	// Step 2: Validate the authenticated user has access to the target company via SDK
+	const accessCheck = await whopsdk.users.checkAccess(companyId, { id: userId });
+	
 	// Step 3: If not authorized, display an 'access denied' message
-	if (!hasAccess) {
+	if (!accessCheck.access) {
 		return (
 			<div className="flex flex-col items-center justify-center min-h-screen p-8 gap-6">
 				<div className="text-center max-w-md">
@@ -77,6 +74,8 @@ export default async function DashboardPage({
 			<JsonViewer data={company} />
 			<h3 className="text-6 font-bold">User Data</h3>
 			<JsonViewer data={user} />
+			<h3 className="text-6 font-bold">Access Details</h3>
+			<JsonViewer data={accessCheck} />
 		</div>
 	);
 }
