@@ -80,7 +80,7 @@ export async function GET() {
 
     if (whopApiKey) {
       // Use real Whop API
-      const whop = new Whop(whopApiKey);
+      const whop = new Whop({ apiKey: whopApiKey });
 
       // Fetch real member data
       // Note: Adjust the API call based on actual Whop SDK methods
