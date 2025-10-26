@@ -2,6 +2,7 @@ import { Button } from "@whop/react/components";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { whopsdk } from "@/lib/whop-sdk";
+import { redirect } from "next/navigation";
 
 export default async function DashboardPage({
 	params,
@@ -9,14 +10,49 @@ export default async function DashboardPage({
 	params: Promise<{ companyId: string }>;
 }) {
 	const { companyId } = await params;
-	// Ensure the user is logged in on whop.
-	const { userId } = await whopsdk.verifyUserToken(await headers());
 
-	// Fetch the neccessary data we want from whop.
-	const [company, user, access] = await Promise.all([
+	// Step 1: Require Whop OAuth login before displaying anything
+	let userId: string;
+	try {
+		const result = await whopsdk.verifyUserToken(await headers());
+		userId = result.userId;
+	} catch (error) {
+		// If user is not authenticated, redirect to login
+		redirect(`/api/auth/login?redirect=/dashboard/${companyId}`);
+	}
+
+	// Step 2: Validate the authenticated user has access to the target company
+	const hasAccess = await whopsdk.users.checkIfUserHasAccessToCompany({
+		userId,
+		companyId,
+	});
+
+	// Step 3: If not authorized, display an 'access denied' message
+	if (!hasAccess) {
+		return (
+			<div className="flex flex-col items-center justify-center min-h-screen p-8 gap-6">
+				<div className="text-center max-w-md">
+					<h1 className="text-9 font-bold text-red-500 mb-4">
+						Access Denied
+					</h1>
+					<p className="text-5 text-gray-10 mb-6">
+						You do not have permission to access this company's dashboard.
+						Please contact the company administrator if you believe this is an error.
+					</p>
+					<Link href="/dashboard">
+						<Button variant="classic" size="3">
+							Return to Dashboard
+						</Button>
+					</Link>
+				</div>
+			</div>
+		);
+	}
+
+	// User is authorized - proceed to show dashboard analytics
+	const [company, user] = await Promise.all([
 		whopsdk.companies.retrieve(companyId),
 		whopsdk.users.retrieve(userId),
-		whopsdk.users.checkAccess(companyId, { id: userId }),
 	]);
 
 	const displayName = user.name || `@${user.username}`;
@@ -25,28 +61,22 @@ export default async function DashboardPage({
 		<div className="flex flex-col p-8 gap-4">
 			<div className="flex justify-between items-center gap-4">
 				<h1 className="text-9">
-					Hi <strong>{displayName}</strong>!
+					Hi {displayName}!
 				</h1>
 				<Link href="https://docs.whop.com/apps" target="_blank">
-					<Button variant="classic" className="w-full" size="3">
+					<Button className="w-full" size="3" variant="classic">
 						Developer Docs
 					</Button>
 				</Link>
 			</div>
-
 			<p className="text-3 text-gray-10">
-				Welcome to you whop app! Replace this template with your own app. To
-				get you started, here's some helpful data you can fetch from whop.
+				Welcome to your whop app! You have been successfully authenticated and authorized.
+				Here's your company dashboard analytics.
 			</p>
-
-			<h3 className="text-6 font-bold">Company data</h3>
+			<h3 className="text-6 font-bold">Company Data</h3>
 			<JsonViewer data={company} />
-
-			<h3 className="text-6 font-bold">User data</h3>
+			<h3 className="text-6 font-bold">User Data</h3>
 			<JsonViewer data={user} />
-
-			<h3 className="text-6 font-bold">Access data</h3>
-			<JsonViewer data={access} />
 		</div>
 	);
 }
