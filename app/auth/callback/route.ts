@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { WhopAPI } from '@whop/sdk';
+import { Whop } from '@whop/sdk';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const whop = new WhopAPI({
+    const whop = new Whop({
       clientId: process.env.NEXT_PUBLIC_WHOP_CLIENT_ID!,
       clientSecret: process.env.WHOP_CLIENT_SECRET!,
     });
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Token exchange failed:', error);
+    console.error('Error exchanging code for token:', error);
     return NextResponse.redirect(new URL('/?error=token_exchange_failed', request.url));
   }
 }
