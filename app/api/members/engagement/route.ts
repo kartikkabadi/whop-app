@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { WhopAPI } from '@whop/sdk';
+import { Whop } from '@whop/sdk';
 
 // Mock member data for testing when real API access isn't available
 const mockMembers = [
@@ -36,92 +36,89 @@ interface Member {
   };
 }
 
-interface MemberEngagement extends Member {
-  engagement_score: number;
+interface MemberEngagement {
+  id: string;
+  email: string;
+  name: string;
+  engagement: 'high' | 'medium' | 'low';
+  membershipAge: number;
+  loginCount: number;
+  lastActive: string;
 }
 
-/**
- * Calculate engagement score for a member
- * Score is based on:
- * - Login frequency (40%)
- * - Recency of activity (40%)
- * - Account age (20%)
- */
-function calculateEngagementScore(member: Member): number {
-  const now = Date.now();
-  const accountAgeInDays = (now - member.created_at) / (1000 * 60 * 60 * 24);
+function categorizeEngagement(member: Member): 'high' | 'medium' | 'low' {
   const loginCount = member.metadata?.login_count || 0;
   const lastActive = member.metadata?.last_active || member.created_at;
-  const daysSinceActive = (now - lastActive) / (1000 * 60 * 60 * 24);
+  const daysSinceActive = Math.floor((Date.now() - lastActive) / 86400000);
 
-  // Login frequency score (0-100): more logins = higher score
-  const loginScore = Math.min((loginCount / Math.max(accountAgeInDays, 1)) * 10, 100);
+  // High engagement: frequent logins and recent activity
+  if (loginCount > 100 || (loginCount > 50 && daysSinceActive < 2)) {
+    return 'high';
+  }
 
-  // Recency score (0-100): more recent activity = higher score
-  const recencyScore = Math.max(0, 100 - daysSinceActive * 2);
+  // Low engagement: few logins or inactive for a long time
+  if (loginCount < 10 || daysSinceActive > 20) {
+    return 'low';
+  }
 
-  // Account age score (0-100): longer membership = higher potential
-  const ageScore = Math.min(accountAgeInDays / 2, 100);
-
-  // Weighted total
-  const totalScore = (loginScore * 0.4) + (recencyScore * 0.4) + (ageScore * 0.2);
-
-  return Math.round(totalScore * 10) / 10; // Round to 1 decimal place
+  // Medium engagement: everything else
+  return 'medium';
 }
 
-export async function GET(request: Request) {
+function formatLastActive(timestamp: number): string {
+  const daysSince = Math.floor((Date.now() - timestamp) / 86400000);
+  if (daysSince === 0) return 'Today';
+  if (daysSince === 1) return 'Yesterday';
+  return `${daysSince} days ago`;
+}
+
+export async function GET() {
   try {
-    let members: Member[] = [];
-    
-    // Try to fetch real data from Whop API
-    try {
-      const whopApiKey = process.env.WHOP_API_KEY;
-      
-      if (whopApiKey) {
-        const whop = new WhopAPI(whopApiKey);
-        // Attempt to fetch members from Whop
-        const response = await whop.members.list();
-        members = response.data || [];
-      } else {
-        console.log('No WHOP_API_KEY found, using mock data');
-        members = mockMembers;
-      }
-    } catch (error) {
-      console.log('Failed to fetch from Whop API, using mock data:', error);
+    const whopApiKey = process.env.WHOP_API_KEY;
+
+    let members: Member[];
+
+    if (whopApiKey) {
+      // Use real Whop API
+      const whop = new Whop(whopApiKey);
+
+      // Fetch real member data
+      // Note: Adjust the API call based on actual Whop SDK methods
+      const response = await whop.users.list();
+      members = response.data || [];
+    } else {
+      // Use mock data when API key is not available
+      console.log('Using mock data - WHOP_API_KEY not found');
       members = mockMembers;
     }
 
-    // If no members found, use mock data
-    if (members.length === 0) {
-      members = mockMembers;
-    }
-
-    // Calculate engagement scores for all members
-    const membersWithEngagement: MemberEngagement[] = members.map(member => ({
-      ...member,
-      engagement_score: calculateEngagementScore(member),
+    // Transform member data into engagement data
+    const memberEngagement: MemberEngagement[] = members.map((member) => ({
+      id: member.id,
+      email: member.email,
+      name: member.name,
+      engagement: categorizeEngagement(member),
+      membershipAge: Math.floor((Date.now() - member.created_at) / 86400000),
+      loginCount: member.metadata?.login_count || 0,
+      lastActive: formatLastActive(member.metadata?.last_active || member.created_at),
     }));
 
-    // Sort by engagement score (highest first)
-    membersWithEngagement.sort((a, b) => b.engagement_score - a.engagement_score);
-
-    // Get top 10 engaged and bottom 10 at-risk
-    const topEngaged = membersWithEngagement.slice(0, 10);
-    const atRisk = membersWithEngagement.slice(-10).reverse();
+    // Calculate engagement statistics
+    const stats = {
+      high: memberEngagement.filter((m) => m.engagement === 'high').length,
+      medium: memberEngagement.filter((m) => m.engagement === 'medium').length,
+      low: memberEngagement.filter((m) => m.engagement === 'low').length,
+      total: memberEngagement.length,
+    };
 
     return NextResponse.json({
-      success: true,
-      data: {
-        all: membersWithEngagement,
-        top_engaged: topEngaged,
-        at_risk: atRisk,
-        total_count: membersWithEngagement.length,
-      },
+      members: memberEngagement,
+      stats,
     });
   } catch (error) {
-    console.error('Error in engagement API:', error);
+    console.error('Error fetching member engagement:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to calculate member engagement' },
+      { error: 'Failed to fetch member engagement data' },
       { status: 500 }
     );
   }
