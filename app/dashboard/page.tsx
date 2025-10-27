@@ -1,7 +1,7 @@
-export default function DashboardPage() {
+export default function Dashboard() {
   return (
-    <div>
-      <h1>Hello, Dashboard!</h1>
+    <div style={{ fontSize: 32, padding: 40 }}>
+      Hello, Dashboard!
     </div>
   );
 }
